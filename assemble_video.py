@@ -53,7 +53,6 @@ def create_subtitles(lines, duration, output_path):
 def find_font():
     candidates = [
         "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/roboto/Roboto-Bold.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
@@ -61,10 +60,6 @@ def find_font():
     for c in candidates:
         if os.path.exists(c):
             return c
-    r = subprocess.run(["fc-match", "-f", "%{file}", "sans-serif:weight=bold"],
-                       capture_output=True, text=True, timeout=5)
-    if r.stdout and os.path.exists(r.stdout.strip()):
-        return r.stdout.strip()
     return "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 
@@ -100,16 +95,13 @@ def generate_bg(palette_idx, output_path):
                              fill=(col[0], col[1], col[2], alpha))
 
         for i in range(30):
-            x = random.randint(0, w)
-            y = random.randint(0, h)
-            s = random.randint(2, 6)
+            x, y, s = random.randint(0, w), random.randint(0, h), random.randint(2, 6)
             col = random.choice([p["c1"], p["c2"], p["c3"]])
             draw.ellipse([x - s, y - s, x + s, y + s],
                          fill=(col[0], col[1], col[2], 40 + random.randint(0, 30)))
 
         for i in range(6):
-            x = random.randint(100, w - 100)
-            y = random.randint(100, h - 100)
+            x, y = random.randint(100, w - 100), random.randint(100, h - 100)
             r = random.randint(300, 600)
             col = random.choice([p["c1"], p["c2"]])
             for j in range(6, 0, -1):
@@ -119,11 +111,9 @@ def generate_bg(palette_idx, output_path):
                              fill=(col[0], col[1], col[2], alpha))
 
         img.save(output_path, "PNG")
-
     except ImportError:
         subprocess.run([
-            "ffmpeg", "-y",
-            "-f", "lavfi", "-i",
+            "ffmpeg", "-y", "-f", "lavfi", "-i",
             f"color=c=#{p['bg'][0]:02x}{p['bg'][1]:02x}{p['bg'][2]:02x}:s=1080x1920:d=1",
             "-frames:v", "1", output_path,
         ], capture_output=True, timeout=15)
@@ -136,50 +126,34 @@ def build_shorts(script, audio_path, index, output_path):
     os.makedirs(ASSETS_DIR, exist_ok=True)
 
     font_path = find_font()
-
     subs = os.path.join(OUTPUT_DIR, f"subs_{index}.srt")
     create_subtitles(lines, duration, subs)
-
     bg_img = os.path.join(ASSETS_DIR, f"bg_{index}.png")
     generate_bg(index, bg_img)
 
-    sub_style = (
-        f"FontName={os.path.basename(font_path).replace('.ttf','').replace('.ttc','')},"
-        f"FontSize=34,"
-        f"PrimaryCol=&H00FFFFFF,"
-        f"OutlineCol=&HFF000000,"
-        f"BorderStyle=3,Outline=2,Shadow=1,"
-        f"Alignment=2,MarginV=120,"
-        f"WrapStyle=1"
-    )
+    fname = os.path.basename(font_path).replace('.ttf','').replace('.ttc','')
+    sub_style = (f"FontName={fname},FontSize=34,PrimaryCol=&H00FFFFFF,"
+                 f"OutlineCol=&HFF000000,BorderStyle=3,Outline=2,Shadow=1,"
+                 f"Alignment=2,MarginV=120,WrapStyle=1")
 
-    cmd = [
-        "ffmpeg", "-y",
-        "-loop", "1", "-i", bg_img,
-        "-i", audio_path,
-        "-filter_complex",
-        f"[0:v]zoompan=z='min(zoom+0.0008,1.03)':d={duration}*30:"
-        f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
-        f"subtitles={subs}:force_style='{sub_style}'[vid]",
-        "-map", "[vid]",
-        "-map", "1:a",
-        "-c:v", "libx264",
-        "-preset", "medium",
-        "-crf", "21",
-        "-c:a", "aac",
-        "-b:a", "128k",
-        "-shortest",
-        "-pix_fmt", "yuv420p",
-        output_path,
-    ]
+    cmd = ["ffmpeg", "-y",
+           "-loop", "1", "-i", bg_img,
+           "-i", audio_path,
+           "-filter_complex",
+           f"[0:v]zoompan=z='min(zoom+0.0008,1.03)':d={duration}*30:"
+           f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
+           f"subtitles={subs}:force_style='{sub_style}'[vid]",
+           "-map", "[vid]", "-map", "1:a",
+           "-c:v", "libx264", "-preset", "medium", "-crf", "21",
+           "-c:a", "aac", "-b:a", "128k", "-shortest", "-pix_fmt", "yuv420p", output_path]
 
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     if p.returncode != 0:
-        print(f"[video] error: {p.stderr[:400]}")
+        print(f"[video] error: {p.stderr[:300]}")
         return None
     if os.path.exists(output_path) and os.path.getsize(output_path) > 10000:
         kb = os.path.getsize(output_path) / 1024
-        print(f"[video] OK {output_path} ({kb:.0f} KB)")
+        print(f"[video] OK ({kb:.0f} KB)")
         return output_path
     return None
 
