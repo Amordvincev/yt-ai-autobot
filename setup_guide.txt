@@ -1,0 +1,73 @@
+===================================================
+YT-AI-AUTOBOT — ИНСТРУКЦИЯ ПО ЗАПУСКУ
+===================================================
+
+1. УСТАНОВКА НА ЛОКАЛЬНЫЙ ПК (Windows)
+---------------------------------------
+   1. Установи Python 3.11+ (https://www.python.org/downloads/)
+   2. Установи FFmpeg:
+      - Скачай: https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full.7z
+      - Распакуй в C:\ffmpeg
+      - Добавь C:\ffmpeg\bin в PATH (системные переменные среды)
+   3. Открой PowerShell в папке проекта и выполни:
+      pip install -r requirements.txt
+   4. Создай фон:
+      python -c "from PIL import Image, ImageDraw; img = Image.new('RGB', (1280, 720), (20,20,30)); draw = ImageDraw.Draw(img); draw.text((60, 630), 'Подпишись на канал', fill=(255,255,255)); img.save('assets/bg.png')"
+   5. Запусти тест (без заливки):
+      python main.py --no-upload
+      (готовое видео появится в папке output)
+
+2. НАСТРОЙКА YOUTUBE API (для автозаливки)
+-------------------------------------------
+   1. Зайди: https://console.cloud.google.com/
+   2. Создай новый проект
+   3. Включи YouTube Data API v3 (библиотека -> YouTube Data API v3 -> включить)
+   4. Создай OAuth 2.0 Client ID:
+      - API и сервисы -> Учётные данные -> Создать -> OAuth client ID
+      - Тип: Desktop application
+      - Скачай JSON, переименуй в client_secret.json
+      - Положи в корень проекта
+   5. Запусти один раз для авторизации:
+      python upload_youtube.py
+      (откроется браузер — войди в свой YouTube-аккаунт и разреши доступ)
+   6. После авторизации появится файл .yt_token/token.pickle
+      — теперь заливка будет работать автоматически
+
+3. НАСТРОЙКА PEXELS (для красивого видеоряда, опционально)
+----------------------------------------------------------
+   1. Зайди: https://www.pexels.com/api/
+   2. Зарегистрируйся и получи бесплатный API ключ
+   3. Вставь его в config.json: "pexels_api_key": "твой_ключ"
+   (без ключа видео будет на статичном фоне — тоже работает)
+
+4. ЗАПУСК НА GITHUB ACTIONS (полный автопилот)
+-----------------------------------------------
+   1. Создай репозиторий на GitHub
+   2. Залей туда все файлы проекта (кроме .yt_token)
+   3. Добавь Secrets в репозиторий (Settings -> Secrets and variables -> Actions):
+      - YT_CLIENT_SECRET: содержимое client_secret.json (целиком)
+      - PEXELS_API_KEY: (опционально)
+   4. В workflows/daily_video.yml настроен запуск каждый день в 8:00 МСК
+      (cron: '0 5 * * *' = 5:00 UTC = 8:00 МСК)
+   5. Можешь запустить вручную: Actions -> Daily AI Video -> Run workflow
+
+5. КОМАНДЫ
+----------
+   python main.py              — создать видео и залить на YouTube
+   python main.py --no-upload  — только создать, без заливки
+   python generate_script.py   — посмотреть какой сценарий выпал
+   python upload_youtube.py    — отдельно залить последнее видео
+
+6. КАК ДОБАВИТЬ СВОИ СЦЕНАРИИ
+------------------------------
+   Открой template_scripts.json и добавь новый объект в массив:
+   {
+     "id": "moya_tema_01",
+     "title": "Название видео",
+     "tags": ["тег1", "тег2"],
+     "lines": [
+       "Строка 1",
+       "Строка 2",
+       "Строка 3"
+     ]
+   }

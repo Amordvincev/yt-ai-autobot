@@ -1,0 +1,17 @@
+{
+  "niche": "facts",
+  "language": "ru",
+  "video_duration_min": 120,
+  "video_duration_max": 300,
+  "schedule_time": "08:00",
+  "timezone": "Europe/Moscow",
+  "pexels_api_key": "",
+  "openai_api_key": "",
+  "youtube_channel_id": "",
+  "youtube_client_secret": "",
+  "youtube_refresh_token": "",
+  "voice": "ru-RU-DariyaNeural",
+  "music": "ambient",
+  "output_dir": "output",
+  "assets_dir": "assets"
+}
