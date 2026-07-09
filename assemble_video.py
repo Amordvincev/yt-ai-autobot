@@ -19,7 +19,7 @@ def get_audio_duration(audio_path):
         return 20.0
 
 
-def _wrap_text(text, max_chars=28):
+def _wrap_text(text, max_chars=35):
     words = text.split()
     lines = []
     current = ""
@@ -136,7 +136,6 @@ def build_shorts(script, audio_path, index, output_path):
     os.makedirs(ASSETS_DIR, exist_ok=True)
 
     font_path = find_font()
-    print(f"[font] using: {font_path}")
 
     subs = os.path.join(OUTPUT_DIR, f"subs_{index}.srt")
     create_subtitles(lines, duration, subs)
@@ -144,13 +143,13 @@ def build_shorts(script, audio_path, index, output_path):
     bg_img = os.path.join(ASSETS_DIR, f"bg_{index}.png")
     generate_bg(index, bg_img)
 
-    font_name = os.path.basename(font_path).replace('.ttf','').replace('.ttc','')
     sub_style = (
-        f"FontName={font_name},FontSize=44,"
+        f"FontName={os.path.basename(font_path).replace('.ttf','').replace('.ttc','')},"
+        f"FontSize=34,"
         f"PrimaryCol=&H00FFFFFF,"
         f"OutlineCol=&HFF000000,"
-        f"BorderStyle=3,Outline=3,Shadow=2,"
-        f"Alignment=2,MarginV=180,"
+        f"BorderStyle=3,Outline=2,Shadow=1,"
+        f"Alignment=2,MarginV=120,"
         f"WrapStyle=1"
     )
 
