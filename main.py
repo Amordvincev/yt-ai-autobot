@@ -1,67 +1,60 @@
-#!/usr/bin/env python3
 import os
 import sys
 import json
-import argparse
-from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import config
-from generate_script import fetch_or_generate_script
+from generate_script import load_templates, pick_template
 from generate_audio import generate_audio
-from fetch_media import fetch_and_cache_media
-from assemble_video import build_video
-from upload_youtube import upload_video
+from assemble_video import build_shorts
 
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
+SHORTS_COUNT = config.get("shorts_per_day", 3)
 
 
 def run_pipeline(upload=True):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    script = fetch_or_generate_script(config)
+    templates = load_templates()
+    used_ids = set()
+    created = []
 
-    print(f"[pipeline] Title: {script['title']}")
-    print(f"[pipeline] Lines: {len(script['lines'])}")
+    for i in range(min(SHORTS_COUNT, len(templates))):
+        available = [t for t in templates if t["id"] not in used_ids]
+        if not available:
+            break
+        script = available[i % len(available)]
+        used_ids.add(script["id"])
 
-    audio_path = os.path.join(OUTPUT_DIR, f"audio_{timestamp}.mp3")
-    generate_audio(script["lines"], audio_path, voice=config["voice"])
-    print(f"[pipeline] Audio: {audio_path}")
+        print(f"[{i+1}/{SHORTS_COUNT}] {script['title']}")
 
-    media_files = fetch_and_cache_media(script["lines"], config)
-    print(f"[pipeline] Media clips: {len(media_files)}")
+        audio_path = os.path.join(OUTPUT_DIR, f"audio_{i}.mp3")
+        voice = config["voice"]
+        generate_audio(script["lines"], audio_path, voice=voice)
 
-    video_path = os.path.join(OUTPUT_DIR, f"video_{timestamp}.mp4")
-    result_path = build_video(script, audio_path, media_files, video_path)
+        video_path = os.path.join(OUTPUT_DIR, f"shorts_{i}.mp4")
+        result = build_shorts(script, audio_path, i, video_path)
 
-    if not result_path or not os.path.exists(result_path):
-        print("[pipeline] Video assembly failed")
-        return
+        if result:
+            created.append(result)
 
-    print(f"[pipeline] Video: {result_path}")
+    print(f"\n[done] Created {len(created)} shorts")
+    for v in created:
+        kb = os.path.getsize(v) / 1024
+        print(f"  {v} ({kb:.0f} KB)")
 
-    if upload:
-        url = upload_video(result_path, script, config)
-        if url:
-            print(f"[pipeline] Done! Published: {url}")
-        else:
-            print("[pipeline] Video created but upload skipped (no auth)")
-    else:
-        print(f"[pipeline] Done! Video saved locally: {result_path}")
+    if upload and created:
+        from upload_youtube import upload_video
+        for vid_path in created:
+            script = {"title": f"Shorts #{vid_path.split('_')[-1].split('.')[0]}", "tags": ["shorts"]}
+            upload_video(vid_path, script, config)
 
-    for f in [audio_path]:
-        try:
-            if os.path.exists(f):
-                os.remove(f)
-                print(f"[pipeline] Cleaned up: {f}")
-        except Exception:
-            pass
+    return created
 
 
 if __name__ == "__main__":
+    import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--no-upload", action="store_true", help="Skip YouTube upload")
+    parser.add_argument("--no-upload", action="store_true")
     args = parser.parse_args()
-
     run_pipeline(upload=not args.no_upload)
