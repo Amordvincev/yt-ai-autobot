@@ -18,24 +18,6 @@ def get_audio_duration(audio_path):
         return 20.0
 
 
-def generate_geq_expression(palette_idx):
-    palettes = [
-        # deep space purple-blue
-        {"r": "255*0.08+30*sin(2*PI*T/8+X/200)", "g": "255*0.04+20*cos(2*PI*T/10+Y/200)", "b": "255*0.25+50*sin(2*PI*T/12+X/300+Y/300)"},
-        # warm sunset orange-red
-        {"r": "255*0.25+60*sin(2*PI*T/9+X/250)", "g": "255*0.08+30*cos(2*PI*T/11+Y/250)", "b": "255*0.04+20*sin(2*PI*T/13+X/350+Y/250)"},
-        # neon green-blue
-        {"r": "255*0.04+20*sin(2*PI*T/7+X/300)", "g": "255*0.2+40*cos(2*PI*T/9+Y/300)", "b": "255*0.15+35*sin(2*PI*T/11+X/400+Y/300)"},
-        # gold-amber
-        {"r": "255*0.2+50*sin(2*PI*T/6+X/200)", "g": "255*0.15+40*cos(2*PI*T/8+Y/200)", "b": "255*0.03+15*sin(2*PI*T/10+X/300+Y/200)"},
-        # cyberpunk pink-blue
-        {"r": "255*0.2+45*sin(2*PI*T/5+X/180)", "g": "255*0.03+15*cos(2*PI*T/7+Y/180)", "b": "255*0.25+55*sin(2*PI*T/9+X/280+Y/180)"},
-        # forest green-teal
-        {"r": "255*0.05+20*sin(2*PI*T/11+X/280)", "g": "255*0.2+35*cos(2*PI*T/13+Y/280)", "b": "255*0.1+25*sin(2*PI*T/15+X/380+Y/280)"},
-    ]
-    return palettes[palette_idx % len(palettes)]
-
-
 def create_subtitles(lines, duration, output_path):
     per_line = duration / max(len(lines), 1)
     with open(output_path, "w", encoding="utf-8") as f:
@@ -48,42 +30,76 @@ def create_subtitles(lines, duration, output_path):
             f.write(f"{line}\n\n")
 
 
+def generate_bg_image(palette_idx, output_path):
+    palettes = [
+        [(15, 5, 40), (40, 10, 60), (10, 5, 30)],
+        [(40, 10, 5), (60, 20, 10), (30, 5, 5)],
+        [(5, 30, 10), (10, 50, 20), (5, 20, 5)],
+        [(40, 35, 5), (60, 50, 10), (30, 25, 5)],
+        [(5, 15, 40), (10, 25, 60), (5, 10, 30)],
+        [(40, 5, 30), (60, 10, 50), (30, 5, 20)],
+    ]
+    c = palettes[palette_idx % len(palettes)]
+
+    try:
+        from PIL import Image, ImageDraw
+        w, h = 1080, 1920
+        img = Image.new("RGB", (w, h), c[0])
+        draw = ImageDraw.Draw(img)
+        cx, cy = w // 2, h // 2
+        for i in range(3):
+            col = c[i]
+            r = 600 - i * 100
+            for j in range(5, 0, -1):
+                cr = int(r * j / 5)
+                grad = tuple(min(255, int(col[k] + (255 - col[k]) * 0.1 * (1 - j / 5))) for k in range(3))
+                draw.ellipse([cx - cr, cy - cr, cx + cr, cy + cr], fill=grad)
+        for i in range(50):
+            x, y, r = random.randint(0, w), random.randint(0, h), random.randint(2, 8)
+            draw.ellipse([x - r, y - r, x + r, y + r], fill=(255, 255, 255, 30))
+        img.save(output_path, "PNG")
+    except ImportError:
+        subprocess.run([
+            "ffmpeg", "-y",
+            "-f", "lavfi", "-i", f"color=c=#{c[0][0]:02x}{c[0][1]:02x}{c[0][2]:02x}:s=1080x1920:d=1",
+            "-frames:v", "1", output_path,
+        ], capture_output=True)
+
+
 def build_shorts(script, audio_path, index, output_path):
     lines = script["lines"]
     duration = get_audio_duration(audio_path)
-
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(ASSETS_DIR, exist_ok=True)
 
     subs = os.path.join(OUTPUT_DIR, f"subs_{index}.srt")
     create_subtitles(lines, duration, subs)
 
-    pal = generate_geq_expression(index)
-    palette_idx = index
+    bg_img = os.path.join(ASSETS_DIR, f"bg_{index}.png")
+    generate_bg_image(index, bg_img)
 
     sub_style = (
-        "FontName=DejaVuSans-Bold,FontSize=54,"
+        "FontName=DejaVuSans-Bold,FontSize=58,"
         "PrimaryCol=&H00FFFFFF,"
         "OutlineCol=&HFF000000,"
         "BorderStyle=3,Outline=5,Shadow=3,"
-        "Alignment=2,MarginV=250,"
-        "WrapStyle=1"
-    )
-
-    filter_chain = (
-        f"geq=r='{pal['r']}':g='{pal['g']}':b='{pal['b']}'[bg];"
-        f"[bg]subtitles={subs}:force_style='{sub_style}'[vid]"
+        "Alignment=2,MarginV=250"
     )
 
     cmd = [
         "ffmpeg", "-y",
-        "-f", "lavfi", "-i", f"color=c=black:s=1080x1920:d={duration}:r=30",
+        "-loop", "1", "-i", bg_img,
         "-i", audio_path,
-        "-filter_complex", filter_chain,
+        "-filter_complex",
+        f"[0:v]zoompan=z='min(zoom+0.001,1.05)':d={duration}*30:"
+        f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
+        f"colorbalance=rh=-0.1:gh=-0.05:bh=0.1,"
+        f"subtitles={subs}:force_style='{sub_style}'[vid]",
         "-map", "[vid]",
         "-map", "1:a",
         "-c:v", "libx264",
         "-preset", "medium",
-        "-crf", "20",
+        "-crf", "22",
         "-c:a", "aac",
         "-b:a", "128k",
         "-shortest",
@@ -93,14 +109,12 @@ def build_shorts(script, audio_path, index, output_path):
 
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     if p.returncode != 0:
-        print(f"[video] ffmpeg error: {p.stderr[:400]}")
+        print(f"[video] error: {p.stderr[:400]}")
         return None
-
     if os.path.exists(output_path) and os.path.getsize(output_path) > 10000:
         kb = os.path.getsize(output_path) / 1024
         print(f"[video] OK {output_path} ({kb:.0f} KB)")
         return output_path
-    print("[video] output file missing or too small")
     return None
 
 
