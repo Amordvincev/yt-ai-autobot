@@ -18,10 +18,29 @@ def get_audio_duration(audio_path):
         return 20.0
 
 
+def _wrap_text(text, max_chars=30):
+    words = text.split()
+    lines = []
+    current = ""
+    for w in words:
+        if len(current) + len(w) + 1 <= max_chars:
+            current += " " + w if current else w
+        else:
+            if current:
+                lines.append(current)
+            current = w
+    if current:
+        lines.append(current)
+    return lines
+
+
 def create_subtitles(lines, duration, output_path):
-    per_line = duration / max(len(lines), 1)
+    wrapped = []
+    for line in lines:
+        wrapped.extend(_wrap_text(line))
+    per_line = duration / max(len(wrapped), 1)
     with open(output_path, "w", encoding="utf-8") as f:
-        for i, line in enumerate(lines):
+        for i, line in enumerate(wrapped):
             s = i * per_line
             e = min((i + 1) * per_line, duration)
             f.write(f"{i+1}\n")
@@ -63,7 +82,7 @@ def generate_bg_image(palette_idx, output_path):
             "ffmpeg", "-y",
             "-f", "lavfi", "-i", f"color=c=#{c[0][0]:02x}{c[0][1]:02x}{c[0][2]:02x}:s=1080x1920:d=1",
             "-frames:v", "1", output_path,
-        ], capture_output=True)
+        ], capture_output=True, timeout=15)
 
 
 def build_shorts(script, audio_path, index, output_path):
@@ -79,11 +98,11 @@ def build_shorts(script, audio_path, index, output_path):
     generate_bg_image(index, bg_img)
 
     sub_style = (
-        "FontName=DejaVuSans-Bold,FontSize=58,"
+        "FontName=DejaVuSans-Bold,FontSize=38,"
         "PrimaryCol=&H00FFFFFF,"
         "OutlineCol=&HFF000000,"
-        "BorderStyle=3,Outline=5,Shadow=3,"
-        "Alignment=2,MarginV=250"
+        "BorderStyle=3,Outline=3,Shadow=2,"
+        "Alignment=2,MarginV=200"
     )
 
     cmd = [
