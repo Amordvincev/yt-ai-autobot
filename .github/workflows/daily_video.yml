@@ -14,6 +14,7 @@ jobs:
       - run: sudo apt update && sudo apt install -y ffmpeg
       - run: pip install -r requirements.txt
       - run: mkdir -p assets output
+      - run: python -c "from PIL import Image, ImageDraw; img=Image.new('RGB',(1280,720),(20,20,30)); ImageDraw.Draw(img).text((60,630),'Podpishis na kanal',fill=(255,255,255)); img.save('assets/bg.png')"
       - run: python main.py --no-upload
       - run: ls -la output/
       - uses: actions/upload-artifact@v4
