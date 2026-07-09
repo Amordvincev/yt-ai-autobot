@@ -1,6 +1,7 @@
 import os
 import subprocess
 import random
+import math
 
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
@@ -18,7 +19,7 @@ def get_audio_duration(audio_path):
         return 20.0
 
 
-def _wrap_text(text, max_chars=30):
+def _wrap_text(text, max_chars=28):
     words = text.split()
     lines = []
     current = ""
@@ -49,38 +50,81 @@ def create_subtitles(lines, duration, output_path):
             f.write(f"{line}\n\n")
 
 
-def generate_bg_image(palette_idx, output_path):
-    palettes = [
-        [(15, 5, 40), (40, 10, 60), (10, 5, 30)],
-        [(40, 10, 5), (60, 20, 10), (30, 5, 5)],
-        [(5, 30, 10), (10, 50, 20), (5, 20, 5)],
-        [(40, 35, 5), (60, 50, 10), (30, 25, 5)],
-        [(5, 15, 40), (10, 25, 60), (5, 10, 30)],
-        [(40, 5, 30), (60, 10, 50), (30, 5, 20)],
+def find_font():
+    candidates = [
+        "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/roboto/Roboto-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
     ]
-    c = palettes[palette_idx % len(palettes)]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    r = subprocess.run(["fc-match", "-f", "%{file}", "sans-serif:weight=bold"],
+                       capture_output=True, text=True, timeout=5)
+    if r.stdout and os.path.exists(r.stdout.strip()):
+        return r.stdout.strip()
+    return "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
+
+def generate_bg(palette_idx, output_path):
+    palettes = [
+        {"bg": (5, 5, 20), "c1": (255, 0, 100), "c2": (0, 200, 255), "c3": (120, 0, 255)},
+        {"bg": (10, 5, 5), "c1": (255, 200, 0), "c2": (255, 50, 50), "c3": (200, 0, 100)},
+        {"bg": (5, 10, 5), "c1": (0, 255, 150), "c2": (50, 200, 255), "c3": (0, 100, 200)},
+        {"bg": (20, 5, 20), "c1": (255, 0, 200), "c2": (100, 0, 255), "c3": (255, 100, 0)},
+        {"bg": (5, 5, 15), "c1": (0, 150, 255), "c2": (0, 255, 200), "c3": (100, 200, 255)},
+        {"bg": (15, 10, 5), "c1": (255, 150, 0), "c2": (255, 50, 100), "c3": (200, 100, 0)},
+    ]
+    p = palettes[palette_idx % len(palettes)]
+    w, h = 1080, 1920
+    cx, cy = w // 2, h // 2
 
     try:
         from PIL import Image, ImageDraw
-        w, h = 1080, 1920
-        img = Image.new("RGB", (w, h), c[0])
-        draw = ImageDraw.Draw(img)
-        cx, cy = w // 2, h // 2
-        for i in range(3):
-            col = c[i]
-            r = 600 - i * 100
-            for j in range(5, 0, -1):
-                cr = int(r * j / 5)
-                grad = tuple(min(255, int(col[k] + (255 - col[k]) * 0.1 * (1 - j / 5))) for k in range(3))
-                draw.ellipse([cx - cr, cy - cr, cx + cr, cy + cr], fill=grad)
-        for i in range(50):
-            x, y, r = random.randint(0, w), random.randint(0, h), random.randint(2, 8)
-            draw.ellipse([x - r, y - r, x + r, y + r], fill=(255, 255, 255, 30))
+        img = Image.new("RGB", (w, h), p["bg"])
+        draw = ImageDraw.Draw(img, "RGBA")
+
+        for i in range(4):
+            x = cx + int(math.sin(i * 1.5) * 350)
+            y = cy + int(math.cos(i * 1.5) * 450)
+            r = 500 + i * 80
+            cols = [p["c1"], p["c2"], p["c3"]]
+            for j in range(8, 0, -1):
+                rad = int(r * j / 8)
+                c = cols[i % 3]
+                alpha = 15 + int(25 * (1 - j / 8))
+                col = tuple(min(255, c[k] + 20) for k in range(3))
+                draw.ellipse([x - rad, y - rad, x + rad, y + rad],
+                             fill=(col[0], col[1], col[2], alpha))
+
+        for i in range(30):
+            x = random.randint(0, w)
+            y = random.randint(0, h)
+            s = random.randint(2, 6)
+            col = random.choice([p["c1"], p["c2"], p["c3"]])
+            draw.ellipse([x - s, y - s, x + s, y + s],
+                         fill=(col[0], col[1], col[2], 40 + random.randint(0, 30)))
+
+        for i in range(6):
+            x = random.randint(100, w - 100)
+            y = random.randint(100, h - 100)
+            r = random.randint(300, 600)
+            col = random.choice([p["c1"], p["c2"]])
+            for j in range(6, 0, -1):
+                rad = int(r * j / 6)
+                alpha = int(6 * (1 - j / 6))
+                draw.ellipse([x - rad, y - rad, x + rad, y + rad],
+                             fill=(col[0], col[1], col[2], alpha))
+
         img.save(output_path, "PNG")
+
     except ImportError:
         subprocess.run([
             "ffmpeg", "-y",
-            "-f", "lavfi", "-i", f"color=c=#{c[0][0]:02x}{c[0][1]:02x}{c[0][2]:02x}:s=1080x1920:d=1",
+            "-f", "lavfi", "-i",
+            f"color=c=#{p['bg'][0]:02x}{p['bg'][1]:02x}{p['bg'][2]:02x}:s=1080x1920:d=1",
             "-frames:v", "1", output_path,
         ], capture_output=True, timeout=15)
 
@@ -91,18 +135,23 @@ def build_shorts(script, audio_path, index, output_path):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     os.makedirs(ASSETS_DIR, exist_ok=True)
 
+    font_path = find_font()
+    print(f"[font] using: {font_path}")
+
     subs = os.path.join(OUTPUT_DIR, f"subs_{index}.srt")
     create_subtitles(lines, duration, subs)
 
     bg_img = os.path.join(ASSETS_DIR, f"bg_{index}.png")
-    generate_bg_image(index, bg_img)
+    generate_bg(index, bg_img)
 
+    font_name = os.path.basename(font_path).replace('.ttf','').replace('.ttc','')
     sub_style = (
-        "FontName=DejaVuSans-Bold,FontSize=38,"
-        "PrimaryCol=&H00FFFFFF,"
-        "OutlineCol=&HFF000000,"
-        "BorderStyle=3,Outline=3,Shadow=2,"
-        "Alignment=2,MarginV=200"
+        f"FontName={font_name},FontSize=44,"
+        f"PrimaryCol=&H00FFFFFF,"
+        f"OutlineCol=&HFF000000,"
+        f"BorderStyle=3,Outline=3,Shadow=2,"
+        f"Alignment=2,MarginV=180,"
+        f"WrapStyle=1"
     )
 
     cmd = [
@@ -110,15 +159,14 @@ def build_shorts(script, audio_path, index, output_path):
         "-loop", "1", "-i", bg_img,
         "-i", audio_path,
         "-filter_complex",
-        f"[0:v]zoompan=z='min(zoom+0.001,1.05)':d={duration}*30:"
+        f"[0:v]zoompan=z='min(zoom+0.0008,1.03)':d={duration}*30:"
         f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
-        f"colorbalance=rh=-0.1:gh=-0.05:bh=0.1,"
         f"subtitles={subs}:force_style='{sub_style}'[vid]",
         "-map", "[vid]",
         "-map", "1:a",
         "-c:v", "libx264",
         "-preset", "medium",
-        "-crf", "22",
+        "-crf", "21",
         "-c:a", "aac",
         "-b:a", "128k",
         "-shortest",
