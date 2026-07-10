@@ -11,11 +11,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: sudo apt update && sudo apt install -y ffmpeg espeak fonts-noto fonts-roboto fonts-dejavu-core
+      - run: sudo apt update && sudo apt install -y ffmpeg espeak fonts-noto
       - run: pip install -r requirements.txt
-      - run: mkdir -p assets output
-      - run: python main.py --no-upload
-      - run: ls -la output/
+      - run: mkdir -p assets output .yt_token
+      - run: echo '${{ secrets.YT_CLIENT_SECRET }}' > client_secret.json
+      - run: echo '${{ secrets.YT_TOKEN }}' | base64 -d > .yt_token/token.pickle
+      - run: python main.py
       - uses: actions/upload-artifact@v4
         with:
           name: video
