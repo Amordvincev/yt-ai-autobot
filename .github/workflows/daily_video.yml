@@ -15,7 +15,11 @@ jobs:
       - run: pip install -r requirements.txt
       - run: mkdir -p assets output .yt_token
       - run: echo '${{ secrets.YT_CLIENT_SECRET }}' > client_secret.json
-      - run: python -c "import base64,os; os.makedirs('.yt_token',exist_ok=True); open('.yt_token/token.pickle','wb').write(base64.b64decode('${{ secrets.YT_TOKEN }}'))"
+      - run: |
+          echo "$YT_TOKEN" | tr -d '\n\r' | base64 -d > .yt_token/token.pickle
+        env:
+          YT_TOKEN: ${{ secrets.YT_TOKEN }}
+      - run: ls -la .yt_token/
       - run: python main.py
       - uses: actions/upload-artifact@v4
         with:
