@@ -16,22 +16,16 @@ def pick_template():
 
 
 def fetch_or_generate_script(config):
-    niche = config["niche"]
-    language = config["language"]
-
     template = pick_template()
-    lines = template["lines"]
-    title = template["title"]
-    tags = template["tags"]
+
+    hook = random.choice(template["hooks"])
+    fact = template["fact"]
+    outro = random.choice(template["outros"])
+
+    lines = [f"{hook} {fact} {outro}"]
 
     return {
-        "title": title,
-        "tags": tags,
+        "title": template["title"],
+        "tags": template["tags"],
         "lines": lines,
     }
-
-
-if __name__ == "__main__":
-    from config import config
-    script = fetch_or_generate_script(config)
-    print(json.dumps(script, ensure_ascii=False, indent=2))
